@@ -33,6 +33,7 @@ type Device struct {
 	tunnelCmd *exec.Cmd
 	Hidden    bool   `json:"hidden"`
 	mounted   bool
+	vncForwarded bool
 }
 
 type DeviceSet struct {
@@ -55,10 +56,14 @@ func sshVerbose() string {
 func (dev *Device) ConnectCommand(addForwards bool) []string {
 	forwards := ""
 	if addForwards {
-		forwards = config.CommonForwards +
-			fmt.Sprintf(" -L5999:localhost:%d", dev.port-config.PortOffset+5900)
-	} else {
-		forwards = ""
+		forwards += config.CommonForwards
+	}
+
+	if !dev.vncForwarded {
+		dev.vncForwarded = true
+		vncPort := dev.port-config.PortOffset+5900
+		forwards += fmt.Sprintf(" -L%d:localhost:%d", vncPort, vncPort)
+		fmt.Printf("VNC server at localhost:%d\n", vncPort)
 	}
 
 	// Pass along AWS env vars, if set. Only implemented in Linux and macOS for now.
@@ -167,8 +172,9 @@ func (dev *Device) tunnelSetup() {
 
 	// Wait for tunnel port to be available.
 	for {
-		if _, err = net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", dev.port), 1*time.Second); err == nil {
+		if conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", dev.port), 1*time.Second); err == nil {
 			// Tunnel ready and forwarding.
+			conn.Close()
 			break
 		}
 		if dev.tunnelCmd == nil {
@@ -187,8 +193,17 @@ func (dev *Device) connect() {
 		return
 	}
 
-	forwarded := (dev.parent.forwardedConnection == nil)
-	connectArgs := dev.ConnectCommand(forwarded)
+	addForwards := (dev.parent.forwardedConnection == nil)
+
+	if addForwards && config.SpecialPort != "" {
+		if conn, err := net.DialTimeout("tcp", config.SpecialPort, 1*time.Second); err == nil {
+			conn.Close()
+			fmt.Printf("*** %s already in use, not forwarding\n", config.SpecialPort)
+			addForwards = false
+		}
+	}
+
+	connectArgs := dev.ConnectCommand(addForwards)
 
 	cmd := exec.Command(connectArgs[0], connectArgs[1:]...)
 	if err = cmd.Start(); err != nil {
@@ -196,7 +211,7 @@ func (dev *Device) connect() {
 		return
 	}
 
-	con := &Connection{dev, cmd, forwarded}
+	con := &Connection{dev, cmd, addForwards}
 
 	dev.parent.connections[con] = true
 
@@ -207,6 +222,7 @@ func (dev *Device) connect() {
 	go func() {
 		cmd.Wait()
 		dev.parent.connectionFinish <- con
+		dev.vncForwarded = false
 	}()
 }
 
