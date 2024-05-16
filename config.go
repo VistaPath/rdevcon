@@ -23,6 +23,7 @@ type Config struct {
 	SelfUpdatePath string
 	PortOffset     int
 	CommonForwards string
+	SpecialPort    string
 	Verbose        bool
 	SshOptionList  []string
 }

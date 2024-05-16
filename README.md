@@ -211,6 +211,7 @@ depth JSON object containing the following keys,
   * SelfUpdatePath: Path to check for updated binaries. If present, the substring `$platform` is replaced with the runtime value of `runtime.GOOS+"-"+runtime.GOARCH`, for example `linux-amd64`. Similarly, the substring `$argv0` is replaced with the basename of the path returned by [os.Executable()](https://pkg.go.dev/os#Executable). SelfUpdatePath can be an S3 URL.
   * PortBase: Integer value added to device port offset to calculate actual port number for device connections.
   * CommonForwards: Common `-L` and `-R` ssh forwarding specifications.
+  * SpecialPort: If the specified `localhost:port` is active (tested by connecting to it), CommonForwards will be ignored. The intent is to avoid conflicts between services running on localhost and remote hosts.
 
 #### Device database
 
