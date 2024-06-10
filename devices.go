@@ -25,6 +25,7 @@ type Device struct {
 	// Note that some fields in the JSON device database are ignored.
 	Serial    string `json:"serial"`
 	ID        string `json:"id"`
+	User      string `json:"user"`
 	offset    int
 	port      int
 	Location  string `json:"allocation"`
@@ -101,19 +102,19 @@ func (dev *Device) ConnectCommand(addForwards bool) []string {
 	}
 
 	// The ssh command should be the same across all platforms.
-	ssh_command := fmt.Sprintf("ssh -A %s -o StrictHostKeychecking=no -o UpdateHostKeys=no -t -p %d %s %s %s bash -l",
-		config.sshOptions(), dev.port, forwards, config.DeviceNameAddr, env_vars)
+	ssh_command := fmt.Sprintf("ssh -A %s -o StrictHostKeychecking=no -o UserKnownHostsFile=/dev/null -t -p %d %s %s@localhost %s bash -l",
+		config.sshOptions(), dev.port, forwards, dev.User, env_vars)
 
 	if config.Verbose {
 		fmt.Println(ssh_command)
 	}
 
 	// Always show sftp access method.
-	fmt.Printf("\nFor file transfers to device %s:\nsftp -o StrictHostKeychecking=no -o UpdateHostKeys=no -P %d %s\n",
-		dev.Serial, dev.port, config.DeviceNameAddr)
+	fmt.Printf("\nFor file transfers to device %s:\nsftp -o StrictHostKeychecking=no -o UserKnownHostsFile=/dev/null -P %d %s@localhost\n",
+		dev.Serial, dev.port, dev.User)
 
 	// And the ssh-copy-id command.
-	fmt.Printf("\nTo install your default pubkey on device %s:\nssh-copy-id -o StrictHostKeychecking=no -o UpdateHostKeys=no -p %d %s\n\n", dev.Serial, dev.port, config.DeviceNameAddr)
+	fmt.Printf("\nTo install your default pubkey on device %s:\nssh-copy-id -o StrictHostKeychecking=no -o UserKnownHostsFile=/dev/null -p %d %s@localhost\n\n", dev.Serial, dev.port, dev.User)
 
 	// Return os-specific command to connect to device.
 	if runtime.GOOS == "windows" {
@@ -249,7 +250,7 @@ func (dev *Device) mount() {
 		return
 	}
 
-	mountArgs := strings.Fields(fmt.Sprintf("sshfs -f %s -o BatchMode=yes -o StrictHostKeychecking=no -o UpdateHostKeys=no -o port=%d vpb@localhost:/", config.sshOptions(), dev.port))
+	mountArgs := strings.Fields(fmt.Sprintf("sshfs -f %s -o BatchMode=yes -o StrictHostKeychecking=no -o UserKnownHostsFile=/dev/null -o port=%d %s@localhost:/", config.sshOptions(), dev.port, dev.User))
 
 	mountPoint := fmt.Sprintf("%s/sshfs/%s", os.Getenv("HOME"), dev.Serial)
 	os.MkdirAll(mountPoint, 0700)

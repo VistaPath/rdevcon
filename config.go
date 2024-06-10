@@ -19,7 +19,6 @@ type Config struct {
 	DevicesPath    string
 	TunnelKeyPath  string
 	TunnelNameAddr string
-	DeviceNameAddr string
 	SelfUpdatePath string
 	PortOffset     int
 	CommonForwards string
