@@ -57,7 +57,11 @@ func sshVerbose() string {
 func (dev *Device) ConnectCommand(addForwards bool) []string {
 	forwards := ""
 	if addForwards {
-		forwards += config.CommonForwards
+		if config.UseLoopbackAddrs {
+			forwards += strings.ReplaceAll(config.CommonForwards, "-L", fmt.Sprintf("-L127.0.0.%d:", dev.offset))
+		} else {
+			forwards = config.CommonForwards
+		}
 	}
 
 	if !dev.vncForwarded {
@@ -197,10 +201,14 @@ func (dev *Device) connect() {
 	addForwards := (dev.parent.forwardedConnection == nil)
 
 	if addForwards && config.SpecialPort != "" {
-		if conn, err := net.DialTimeout("tcp", config.SpecialPort, 1*time.Second); err == nil {
+		if config.UseLoopbackAddrs {
+			fmt.Printf("+++ using 127.0.0.%d forwards\n", dev.offset)
+		} else if conn, err := net.DialTimeout("tcp", config.SpecialPort, 1*time.Second); err == nil {
 			conn.Close()
 			fmt.Printf("*** %s already in use, not forwarding\n", config.SpecialPort)
 			addForwards = false
+		} else {
+			fmt.Printf("+++ using localhost forwards\n")
 		}
 	}
 

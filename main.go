@@ -13,8 +13,6 @@ import (
 	"time"
 )
 
-var config *Config
-
 //go:embed devices.json
 var device_database string
 
@@ -55,6 +53,9 @@ func help() {
 	fmt.Println("23080123T - connect to device with serial 23080123T")
 	fmt.Println("22123! - connect to device with tunnel port 22123 (for unlisted devices)")
 	fmt.Println("list - list devices")
+	fmt.Println("unlock-hidden -  unhide prod and demo devices (speedbump)")
+	fmt.Println("lock-hidden - hide prod and demo devices (speedbump)")
+	fmt.Println("loopback - toggle use of loopback addresses for port forwards")
 	fmt.Println("help - this help")
 	fmt.Println("exit - exit program")
 	fmt.Println("exit!- exit program even if clean exit conditions aren't met (also ctrl-d or ctrl-z)")
@@ -125,6 +126,13 @@ func main() {
 			allDevices.unlockHidden = true
 		} else if input == "lock-hidden" {
 			allDevices.unlockHidden = false
+		} else if input == "loopback" {
+			config.UseLoopbackAddrs = !config.UseLoopbackAddrs
+			state := "disabled"
+			if config.UseLoopbackAddrs {
+				state = "enabled"
+			}
+			fmt.Printf("%s loopback addresses for forwards\n", state)
 		} else if input == "help" {
 			help()
 		} else if input[ilen-1:] == "~" {
