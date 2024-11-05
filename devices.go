@@ -23,17 +23,17 @@ type Connection struct {
 
 type Device struct {
 	// Note that some fields in the JSON device database are ignored.
-	Serial    string `json:"serial"`
-	ID        string `json:"id"`
-	User      string `json:"user"`
-	offset    int
-	port      int
-	Location  string `json:"allocation"`
-	Comment   string `json:"notes"`
-	parent    *DeviceSet
-	tunnelCmd *exec.Cmd
-	Hidden    bool   `json:"hidden"`
-	mounted   bool
+	Serial       string `json:"serial"`
+	ID           string `json:"id"`
+	User         string `json:"user"`
+	offset       int
+	port         int
+	Location     string `json:"allocation"`
+	Comment      string `json:"notes"`
+	parent       *DeviceSet
+	tunnelCmd    *exec.Cmd
+	Hidden       bool `json:"hidden"`
+	mounted      bool
 	vncForwarded bool
 }
 
@@ -58,7 +58,7 @@ func (dev *Device) ConnectCommand(addForwards bool) []string {
 	forwards := ""
 	if addForwards {
 		if config.UseLoopbackAddrs {
-			forwards += strings.ReplaceAll(config.CommonForwards, "-L", fmt.Sprintf("-L127.0.0.%d:", dev.offset))
+			forwards += strings.ReplaceAll(config.CommonForwards, "-L", fmt.Sprintf("-L127.0.1.%d:", dev.offset))
 		} else {
 			forwards = config.CommonForwards
 		}
@@ -66,9 +66,16 @@ func (dev *Device) ConnectCommand(addForwards bool) []string {
 
 	if !dev.vncForwarded {
 		dev.vncForwarded = true
-		vncPort := dev.port-config.PortOffset+5900
-		forwards += fmt.Sprintf(" -L%d:localhost:%d", vncPort, vncPort)
-		fmt.Printf("VNC server at localhost:%d\n", vncPort)
+		vncPort := dev.port - config.PortOffset + 5900
+		vncForward := ""
+		if config.UseLoopbackAddrs {
+			vncForward = fmt.Sprintf("127.0.1.%d:%d", dev.offset, vncPort)
+		} else {
+			vncForward = fmt.Sprintf("localhost:%d", vncPort)
+		}
+		forwards += fmt.Sprintf(" -L%s:localhost:%d", vncForward, vncPort)
+		fmt.Printf("VNC server at %s\n", vncForward)
+		fmt.Print(forwards)
 	}
 
 	// Pass along AWS env vars, if set. Only implemented in Linux and macOS for now.
@@ -202,7 +209,7 @@ func (dev *Device) connect() {
 
 	if addForwards && config.SpecialPort != "" {
 		if config.UseLoopbackAddrs {
-			fmt.Printf("+++ using 127.0.0.%d forwards\n", dev.offset)
+			fmt.Printf("+++ using 127.0.1.%d forwards\n", dev.offset)
 		} else if conn, err := net.DialTimeout("tcp", config.SpecialPort, 1*time.Second); err == nil {
 			conn.Close()
 			fmt.Printf("*** %s already in use, not forwarding\n", config.SpecialPort)
@@ -258,7 +265,8 @@ func (dev *Device) mount() {
 		return
 	}
 
-	mountArgs := strings.Fields(fmt.Sprintf("sshfs -f %s -o BatchMode=yes -o StrictHostKeychecking=no -o UserKnownHostsFile=/dev/null -o port=%d %s@localhost:/", config.sshOptions(), dev.port, dev.User))
+	mountArgs := strings.Fields(fmt.Sprintf("sshfs -f %s -o BatchMode=yes -o StrictHostKeychecking=no -o UserKnownHostsFile=/dev/null -o port=%d %s@127.0.1.%d:/",
+		config.sshOptions(), dev.port, dev.User, dev.offset))
 
 	mountPoint := fmt.Sprintf("%s/sshfs/%s", os.Getenv("HOME"), dev.Serial)
 	os.MkdirAll(mountPoint, 0700)
@@ -336,6 +344,7 @@ func (dset *DeviceSet) find(s string) *Device {
 					offset:   port - config.PortOffset,
 					port:     port,
 					Location: "dev",
+					User:     "vpb", // Could make this configurble, or a required argument.
 					Comment:  fmt.Sprintf("anonymous device - port %d", port),
 					parent:   dset}
 				dset.add(newDevice)
@@ -364,7 +373,6 @@ func loadDevices() *DeviceSet {
 	dset := &DeviceSet{tunnelFinish: make(chan *Device), connectionFinish: make(chan *Connection),
 		devicesBySerial: make(map[string]*Device),
 		connections:     make(map[*Connection]bool)}
-
 
 	var devices []*Device
 	err := json.Unmarshal([]byte(device_database), &devices)
