@@ -209,11 +209,9 @@ func (dev *Device) connect() {
 
 	if addForwards && config.SpecialPort != "" {
 		if config.UseLoopbackAddrs {
-			if runtime.GOOS == "darwin" {
-				if err = darwinEnableLoopbackAddr(fmt.Sprintf("127.0.1.%d", dev.offset)); err != nil {
-					fmt.Println(err)
-					return
-				}
+			if err = enableLoopbackAddr(fmt.Sprintf("127.0.1.%d", dev.offset)); err != nil {
+				fmt.Println(err)
+				return
 			}
 			fmt.Printf("+++ using 127.0.1.%d forwards\n", dev.offset)
 		} else if conn, err := net.DialTimeout("tcp", config.SpecialPort, 1*time.Second); err == nil {

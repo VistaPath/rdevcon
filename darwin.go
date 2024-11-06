@@ -3,9 +3,7 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -107,42 +105,3 @@ func darwinSudoCommand(args []string) error {
 	return cmd.Run()
 }
 
-var loopbackAliases = []string{}
-
-// Enable a loopback address on macOS. This requires admin access using sudo,
-// for which we use an askpass script.
-func darwinEnableLoopbackAddr(addr string) error {
-	// First validate the IP address.
-	ip := net.ParseIP(addr)
-	if ip == nil {
-		return errors.New("Invalid IP address")
-	}
-
-	_, subnet, _ := net.ParseCIDR("127.0.0.0/8")
-	if !subnet.Contains(ip) {
-		return errors.New("Invalid loopback IP address")
-	}
-
-	rc := exec.Command("sh", "-c", fmt.Sprintf("ifconfig lo0 | grep %s", addr)).Run()
-	if rc == nil {
-		return nil
-	}
-
-	// Add the loopback.
-	err := darwinSudoCommand([]string{"ifconfig", "lo0", "alias", addr})
-
-	if err == nil {
-		// Remember alias for later removal.
-		loopbackAliases = append(loopbackAliases, addr)
-	}
-
-	return err
-}
-
-// Cleanup resources allocated during program.
-func darwinCleanup() {
-	for _, addr := range loopbackAliases {
-		fmt.Printf("removing lo0 alias %s\n", addr)
-		darwinSudoCommand([]string{"ifconfig", "lo0", "-alias", addr})
-	}
-}
