@@ -104,4 +104,3 @@ func darwinSudoCommand(args []string) error {
 
 	return cmd.Run()
 }
-
