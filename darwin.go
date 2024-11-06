@@ -3,8 +3,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 )
 
@@ -81,4 +84,73 @@ func darwinConnectCommand(ssh_command string) []string {
 	os.WriteFile(launchScriptPath, []byte(fmt.Sprintf(launchScriptTemplate, terminalScriptPath)), 0700)
 
 	return []string{launchScriptPath, tempdir}
+}
+
+
+var loopbackAliases = []string{}
+
+// script for "sudo -A"
+var askpassScript = `#!/bin/bash
+osascript -e 'Tell application "System Events" to display dialog "Authentication requried to add loopback address:" default answer "" with hidden answer buttons {"OK"} default button 1' -e 'text returned of result'
+`
+
+// Enable a loopback address on macOS. This requires admin access using sudo,
+// for which we use an askpass script.
+func darwinEnableLoopbackAddr(addr string) error {
+	// First validate the IP address.
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return errors.New("Invalid IP address")
+	}
+
+	_, subnet, _ := net.ParseCIDR("127.0.0.0/8")
+	if !subnet.Contains(ip) {
+		return errors.New("Invalid loopback IP address")
+	}
+
+	rc := exec.Command("sh", "-c", fmt.Sprintf("ifconfig lo0 | grep %s", addr)).Run()
+	if rc == nil {
+		return nil;
+	}
+
+	// Add the loopback, with support for sudo askpass.
+	tempdir, _ := os.MkdirTemp("/tmp", "rdevcon-loopback-*")
+	defer os.RemoveAll(tempdir)
+
+	askpassScriptPath := tempdir + "/" + "askpass.sh"
+	os.WriteFile(askpassScriptPath, []byte(askpassScript), 0700)
+
+	fmt.Println(tempdir)
+	fmt.Println(askpassScriptPath)
+
+	cmd := exec.Command("sudo", "-A", "-k", "ifconfig", "lo0", "alias", addr)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(), "SUDO_ASKPASS="+askpassScriptPath)
+	err := cmd.Run()
+
+	if err == nil {
+		// Remember alias for later removal.
+		loopbackAliases = append(loopbackAliases, addr)
+	}
+
+	return err
+}
+
+
+func darwinCleanup() {
+	tempdir, _ := os.MkdirTemp("/tmp", "rdevcon-loopback-*")
+	defer os.RemoveAll(tempdir)
+
+	askpassScriptPath := tempdir + "/" + "askpass.sh"
+	os.WriteFile(askpassScriptPath, []byte(askpassScript), 0700)
+
+	for _, addr := range loopbackAliases {
+		fmt.Printf("removing lo0 alias %s\n", addr)
+		cmd := exec.Command("sudo", "-A", "ifconfig", "lo0", "-alias", addr)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Env = append(os.Environ(), "SUDO_ASKPASS="+askpassScriptPath)
+		cmd.Run()
+	}
 }
