@@ -57,8 +57,8 @@ func enableLoopbackAddr(addr string) error {
 	return nil
 }
 
-// Cleanup resources allocated during program.
-func darwinCleanup() {
+// Clean up resources allocated at runtime.
+func loopbackCleanup() {
 	for _, addr := range loopbackAliases {
 		if runtime.GOOS == "darwin" {
 			fmt.Printf("removing lo0 alias %s\n", addr)
