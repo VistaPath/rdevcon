@@ -86,10 +86,7 @@ func darwinConnectCommand(ssh_command string) []string {
 	return []string{launchScriptPath, tempdir}
 }
 
-
-var loopbackAliases = []string{}
-
-// script for "sudo -A"
+// sudo askpass program, created in a temp folder that is deleted after use
 var askpassScript = `#!/bin/bash
 osascript -e 'Tell application "System Events" to display dialog "Authentication requried to add loopback address:" default answer "" with hidden answer buttons {"OK"} default button 1' -e 'text returned of result'
 `
@@ -101,7 +98,7 @@ func darwinSudoCommand(args []string) error {
 	askpassScriptPath := tempdir + "/" + "askpass.sh"
 	os.WriteFile(askpassScriptPath, []byte(askpassScript), 0700)
 
-	cmd := exec.Command("sudo", "-A", "-k")
+	cmd := exec.Command("sudo", "-A")
 	cmd.Args = append(cmd.Args, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -109,6 +106,8 @@ func darwinSudoCommand(args []string) error {
 
 	return cmd.Run()
 }
+
+var loopbackAliases = []string{}
 
 // Enable a loopback address on macOS. This requires admin access using sudo,
 // for which we use an askpass script.
@@ -126,7 +125,7 @@ func darwinEnableLoopbackAddr(addr string) error {
 
 	rc := exec.Command("sh", "-c", fmt.Sprintf("ifconfig lo0 | grep %s", addr)).Run()
 	if rc == nil {
-		return nil;
+		return nil
 	}
 
 	// Add the loopback.
@@ -139,7 +138,6 @@ func darwinEnableLoopbackAddr(addr string) error {
 
 	return err
 }
-
 
 // Cleanup resources allocated during program.
 func darwinCleanup() {
