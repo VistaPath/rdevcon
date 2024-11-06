@@ -40,6 +40,11 @@ func checkExitConditions(done *bool) {
 		} else {
 			fmt.Printf("Some processes are holding sshfs references, please close them:\n%s\n", output)
 		}
+
+		if runtime.GOOS == "darwin" {
+			darwinCleanup()
+		}
+
 	} else if runtime.GOOS == "windows" {
 		// sshfs not supported on Windows, so nothing to check.
 		*done = true
