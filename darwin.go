@@ -85,16 +85,16 @@ func darwinConnectCommand(ssh_command string) []string {
 }
 
 // sudo askpass program, created in a temp folder that is deleted after use
-var askpassScript = `#!/bin/bash
-osascript -e 'Tell application "System Events" to display dialog "Authentication requried to add loopback address:" default answer "" with hidden answer buttons {"OK"} default button 1' -e 'text returned of result'
+var askpassScriptTemplate = `#!/bin/bash
+osascript -e 'Tell application "System Events" to display dialog "Authentication required%s:" default answer "" with hidden answer buttons {"OK"} default button 1' -e 'text returned of result'
 `
 
-func darwinSudoCommand(args []string) error {
+func darwinSudoCommand(authMessage string, args []string) error {
 	tempdir, _ := os.MkdirTemp("/tmp", "rdevcon-sudo-*")
 	defer os.RemoveAll(tempdir)
 
 	askpassScriptPath := tempdir + "/" + "askpass.sh"
-	os.WriteFile(askpassScriptPath, []byte(askpassScript), 0700)
+	os.WriteFile(askpassScriptPath, []byte(fmt.Sprintf(askpassScriptTemplate, authMessage)), 0700)
 
 	cmd := exec.Command("sudo", "-A")
 	cmd.Args = append(cmd.Args, args...)

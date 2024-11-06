@@ -37,7 +37,7 @@ func enableLoopbackAddr(addr string) error {
 		}
 
 		// Add the loopback.
-		err := darwinSudoCommand([]string{"ifconfig", "lo0", "alias", addr})
+		err := darwinSudoCommand(" to add loopback alias", []string{"ifconfig", "lo0", "alias", addr})
 		if err != nil {
 			return err
 		}
@@ -62,7 +62,7 @@ func loopbackCleanup() {
 	for _, addr := range loopbackAliases {
 		if runtime.GOOS == "darwin" {
 			fmt.Printf("removing lo0 alias %s\n", addr)
-			darwinSudoCommand([]string{"ifconfig", "lo0", "-alias", addr})
+			darwinSudoCommand(" to remove loopback alias", []string{"ifconfig", "lo0", "-alias", addr})
 		}
 
 		if runtime.GOOS == "windows" {
