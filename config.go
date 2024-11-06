@@ -63,6 +63,8 @@ func ConfigLoad() *Config {
 		filepath.Base(executable),
 		1)
 
+	setLoopback(config.UseLoopbackAddrs)
+
 	return config
 }
 

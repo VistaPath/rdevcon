@@ -47,6 +47,22 @@ func checkExitConditions(done *bool) {
 	}
 }
 
+func setLoopback(mode bool) {
+	if mode && runtime.GOOS == "windows" {
+		if !windowsIsAdmin() {
+			windowsShowMessage("Run as adminstrator to use loopback mode.")
+			return
+		}
+	}
+
+	config.UseLoopbackAddrs = mode
+	state := "disabled"
+	if config.UseLoopbackAddrs {
+		state = "enabled"
+	}
+	fmt.Printf("%s loopback addresses for forwards\n", state)
+}
+
 func help() {
 	fmt.Println("")
 	fmt.Println("Commands:")
@@ -128,12 +144,7 @@ func main() {
 		} else if input == "lock-hidden" {
 			allDevices.unlockHidden = false
 		} else if input == "loopback" {
-			config.UseLoopbackAddrs = !config.UseLoopbackAddrs
-			state := "disabled"
-			if config.UseLoopbackAddrs {
-				state = "enabled"
-			}
-			fmt.Printf("%s loopback addresses for forwards\n", state)
+			setLoopback(!config.UseLoopbackAddrs)
 		} else if input == "help" {
 			help()
 		} else if input[ilen-1:] == "~" {
