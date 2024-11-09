@@ -23,6 +23,7 @@ type Config struct {
 	PortOffset       int
 	CommonForwards   string
 	SpecialPort      string
+	AnonUser         string
 	Verbose          bool
 	SshOptionList    []string
 	UseLoopbackAddrs bool

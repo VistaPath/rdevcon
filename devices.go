@@ -348,7 +348,7 @@ func (dset *DeviceSet) find(s string) *Device {
 					offset:   port - config.PortOffset,
 					port:     port,
 					Location: "dev",
-					User:     "vpb", // Could make this configurble, or a required argument.
+					User:     config.AnonUser,
 					Comment:  fmt.Sprintf("anonymous device - port %d", port),
 					parent:   dset}
 				dset.add(newDevice)
