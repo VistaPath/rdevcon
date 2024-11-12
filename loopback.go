@@ -5,6 +5,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"golang.org/x/exp/slices"
 	"log"
 	"net"
 	"os/exec"
@@ -18,6 +19,11 @@ func enableLoopbackAddr(addr string) error {
 	ip := net.ParseIP(addr)
 	if ip == nil {
 		return errors.New("Invalid IP address")
+	}
+
+	if slices.Contains(loopbackAliases, addr) {
+		// Already have this one.
+		return nil
 	}
 
 	_, subnet, _ := net.ParseCIDR("127.0.0.0/8")

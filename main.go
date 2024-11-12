@@ -174,11 +174,6 @@ func main() {
 			// TBD for now, needs testing.
 			dev = dev
 		case con := <-allDevices.connectionFinish:
-			// Clear forwardedConnection if it matches.
-			if con == allDevices.forwardedConnection {
-				allDevices.forwardedConnection = nil
-				fmt.Println("forwards available again!")
-			}
 			// Remove from connection set.
 			delete(allDevices.connections, con)
 		}

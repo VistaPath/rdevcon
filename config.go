@@ -21,8 +21,7 @@ type Config struct {
 	TunnelNameAddr   string
 	SelfUpdatePath   string
 	PortOffset       int
-	CommonForwards   string
-	SpecialPort      string
+	Forwards         string
 	AnonUser         string
 	Verbose          bool
 	SshOptionList    []string
