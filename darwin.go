@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 )
 
@@ -81,4 +82,25 @@ func darwinConnectCommand(ssh_command string) []string {
 	os.WriteFile(launchScriptPath, []byte(fmt.Sprintf(launchScriptTemplate, terminalScriptPath)), 0700)
 
 	return []string{launchScriptPath, tempdir}
+}
+
+// sudo askpass program, created in a temp folder that is deleted after use
+var askpassScriptTemplate = `#!/bin/bash
+osascript -e 'Tell application "System Events" to display dialog "Authentication required%s:" default answer "" with hidden answer buttons {"OK"} default button 1' -e 'text returned of result'
+`
+
+func darwinSudoCommand(authMessage string, args []string) error {
+	tempdir, _ := os.MkdirTemp("/tmp", "rdevcon-sudo-*")
+	defer os.RemoveAll(tempdir)
+
+	askpassScriptPath := tempdir + "/" + "askpass.sh"
+	os.WriteFile(askpassScriptPath, []byte(fmt.Sprintf(askpassScriptTemplate, authMessage)), 0700)
+
+	cmd := exec.Command("sudo", "-A")
+	cmd.Args = append(cmd.Args, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(), "SUDO_ASKPASS="+askpassScriptPath)
+
+	return cmd.Run()
 }

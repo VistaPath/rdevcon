@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -23,18 +24,17 @@ type Connection struct {
 
 type Device struct {
 	// Note that some fields in the JSON device database are ignored.
-	Serial    string `json:"serial"`
-	ID        string `json:"id"`
-	User      string `json:"user"`
-	offset    int
-	port      int
-	Location  string `json:"allocation"`
-	Comment   string `json:"notes"`
-	parent    *DeviceSet
-	tunnelCmd *exec.Cmd
-	Hidden    bool   `json:"hidden"`
-	mounted   bool
-	vncForwarded bool
+	Serial       string `json:"serial"`
+	ID           string `json:"id"`
+	User         string `json:"user"`
+	offset       int
+	port         int
+	Location     string `json:"allocation"`
+	Comment      string `json:"notes"`
+	parent       *DeviceSet
+	tunnelCmd    *exec.Cmd
+	Hidden       bool `json:"hidden"`
+	mounted      bool
 }
 
 type DeviceSet struct {
@@ -43,7 +43,6 @@ type DeviceSet struct {
 	tunnelFinish        chan *Device
 	connectionFinish    chan *Connection
 	connections         map[*Connection]bool
-	forwardedConnection *Connection
 	unlockHidden        bool
 }
 
@@ -54,17 +53,32 @@ func sshVerbose() string {
 	return ""
 }
 
+func (dev *Device) getLoopbackAddr() string {
+	if config.UseLoopbackAddrs {
+		// Return a loopback address in the space 127.x.x.x using
+		// values 0..99 for the 3 trailing octets.
+		high := (dev.offset / 10000) % 100
+		mid := (dev.offset / 100) % 100
+		low := dev.offset % 100
+		return fmt.Sprintf("127.%d.%d.%d", high, mid, low)
+	} else {
+		return "localhost"
+	}
+}
+
 func (dev *Device) ConnectCommand(addForwards bool) []string {
 	forwards := ""
 	if addForwards {
-		forwards += config.CommonForwards
-	}
+		if config.UseLoopbackAddrs {
+			forwards += strings.ReplaceAll(config.Forwards, "-L", fmt.Sprintf("-L%s:", dev.getLoopbackAddr()))
+		} else {
+			forwards = config.Forwards
+		}
 
-	if !dev.vncForwarded {
-		dev.vncForwarded = true
-		vncPort := dev.port-config.PortOffset+5900
-		forwards += fmt.Sprintf(" -L%d:localhost:%d", vncPort, vncPort)
-		fmt.Printf("VNC server at localhost:%d\n", vncPort)
+		vncPort := dev.port - config.PortOffset + 5900
+		vncForward := fmt.Sprintf("%s:%d", dev.getLoopbackAddr(), vncPort)
+		forwards += fmt.Sprintf(" -L%s:localhost:%d", vncForward, vncPort)
+		fmt.Printf("VNC server at %s\n", vncForward)
 	}
 
 	// Pass along AWS env vars, if set. Only implemented in Linux and macOS for now.
@@ -194,15 +208,37 @@ func (dev *Device) connect() {
 		return
 	}
 
-	addForwards := (dev.parent.forwardedConnection == nil)
+	// Test if the first forwarded port is already being listened on.
+	// If not, enable all the forwards.
+	firstForwardedPort := -1
 
-	if addForwards && config.SpecialPort != "" {
-		if conn, err := net.DialTimeout("tcp", config.SpecialPort, 1*time.Second); err == nil {
+	re := regexp.MustCompile(`-L(\d+):`)
+	match := re.FindStringSubmatch(config.Forwards)
+	if len(match) >= 2 {
+		firstForwardedPort = atoi(match[1])
+	}
+
+	if firstForwardedPort != -1 {
+		testAddr := fmt.Sprintf("%s:%d", dev.getLoopbackAddr(), firstForwardedPort)
+
+		if conn, err := net.DialTimeout("tcp", testAddr, 1*time.Second); err == nil {
 			conn.Close()
-			fmt.Printf("*** %s already in use, not forwarding\n", config.SpecialPort)
-			addForwards = false
+			firstForwardedPort = -1
+			fmt.Printf("*** %s already in use, not forwarding\n", testAddr)
+		} else {
+			fmt.Printf("+++ using %s forwards\n", dev.getLoopbackAddr())
 		}
 	}
+
+	if config.UseLoopbackAddrs {
+		if err = enableLoopbackAddr(dev.getLoopbackAddr()); err != nil {
+			fmt.Println(err)
+			return
+
+		}
+	}
+
+	addForwards := (firstForwardedPort != -1)
 
 	connectArgs := dev.ConnectCommand(addForwards)
 
@@ -216,14 +252,9 @@ func (dev *Device) connect() {
 
 	dev.parent.connections[con] = true
 
-	if dev.parent.forwardedConnection == nil {
-		dev.parent.forwardedConnection = con
-	}
-
 	go func() {
 		cmd.Wait()
 		dev.parent.connectionFinish <- con
-		dev.vncForwarded = false
 	}()
 }
 
@@ -250,7 +281,8 @@ func (dev *Device) mount() {
 		return
 	}
 
-	mountArgs := strings.Fields(fmt.Sprintf("sshfs -f %s -o BatchMode=yes -o StrictHostKeychecking=no -o UserKnownHostsFile=/dev/null -o port=%d %s@localhost:/", config.sshOptions(), dev.port, dev.User))
+	mountArgs := strings.Fields(fmt.Sprintf("sshfs -f %s -o BatchMode=yes -o StrictHostKeychecking=no -o UserKnownHostsFile=/dev/null -o port=%d %s@%s:/",
+		config.sshOptions(), dev.port, dev.User, dev.getLoopbackAddr()))
 
 	mountPoint := fmt.Sprintf("%s/sshfs/%s", os.Getenv("HOME"), dev.Serial)
 	os.MkdirAll(mountPoint, 0700)
@@ -328,6 +360,7 @@ func (dset *DeviceSet) find(s string) *Device {
 					offset:   port - config.PortOffset,
 					port:     port,
 					Location: "dev",
+					User:     config.AnonUser,
 					Comment:  fmt.Sprintf("anonymous device - port %d", port),
 					parent:   dset}
 				dset.add(newDevice)
@@ -356,7 +389,6 @@ func loadDevices() *DeviceSet {
 	dset := &DeviceSet{tunnelFinish: make(chan *Device), connectionFinish: make(chan *Connection),
 		devicesBySerial: make(map[string]*Device),
 		connections:     make(map[*Connection]bool)}
-
 
 	var devices []*Device
 	err := json.Unmarshal([]byte(device_database), &devices)

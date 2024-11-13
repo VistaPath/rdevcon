@@ -13,8 +13,6 @@ import (
 	"time"
 )
 
-var config *Config
-
 //go:embed devices.json
 var device_database string
 
@@ -42,10 +40,27 @@ func checkExitConditions(done *bool) {
 		} else {
 			fmt.Printf("Some processes are holding sshfs references, please close them:\n%s\n", output)
 		}
+
 	} else if runtime.GOOS == "windows" {
 		// sshfs not supported on Windows, so nothing to check.
 		*done = true
 	}
+}
+
+func setLoopback(mode bool) {
+	if mode && runtime.GOOS == "windows" {
+		if !windowsIsAdmin() {
+			windowsShowMessage("Run as adminstrator to use loopback mode.")
+			return
+		}
+	}
+
+	config.UseLoopbackAddrs = mode
+	state := "disabled"
+	if config.UseLoopbackAddrs {
+		state = "enabled"
+	}
+	fmt.Printf("%s loopback addresses for forwards\n", state)
 }
 
 func help() {
@@ -55,6 +70,9 @@ func help() {
 	fmt.Println("23080123T - connect to device with serial 23080123T")
 	fmt.Println("22123! - connect to device with tunnel port 22123 (for unlisted devices)")
 	fmt.Println("list - list devices")
+	fmt.Println("unlock-hidden -  unhide prod and demo devices (speedbump)")
+	fmt.Println("lock-hidden - hide prod and demo devices (speedbump)")
+	fmt.Println("loopback - toggle use of loopback addresses for port forwards")
 	fmt.Println("help - this help")
 	fmt.Println("exit - exit program")
 	fmt.Println("exit!- exit program even if clean exit conditions aren't met (also ctrl-d or ctrl-z)")
@@ -125,6 +143,8 @@ func main() {
 			allDevices.unlockHidden = true
 		} else if input == "lock-hidden" {
 			allDevices.unlockHidden = false
+		} else if input == "loopback" {
+			setLoopback(!config.UseLoopbackAddrs)
 		} else if input == "help" {
 			help()
 		} else if input[ilen-1:] == "~" {
@@ -154,11 +174,6 @@ func main() {
 			// TBD for now, needs testing.
 			dev = dev
 		case con := <-allDevices.connectionFinish:
-			// Clear forwardedConnection if it matches.
-			if con == allDevices.forwardedConnection {
-				allDevices.forwardedConnection = nil
-				fmt.Println("forwards available again!")
-			}
 			// Remove from connection set.
 			delete(allDevices.connections, con)
 		}
@@ -167,6 +182,8 @@ func main() {
 			break
 		}
 	}
+
+	loopbackCleanup()
 
 	for _, dev := range allDevices.deviceList {
 		if dev.tunnelCmd != nil {

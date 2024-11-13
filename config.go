@@ -16,16 +16,19 @@ import (
 var config_json string
 
 type Config struct {
-	DevicesPath    string
-	TunnelKeyPath  string
-	TunnelNameAddr string
-	SelfUpdatePath string
-	PortOffset     int
-	CommonForwards string
-	SpecialPort    string
-	Verbose        bool
-	SshOptionList  []string
+	DevicesPath      string
+	TunnelKeyPath    string
+	TunnelNameAddr   string
+	SelfUpdatePath   string
+	PortOffset       int
+	Forwards         string
+	AnonUser         string
+	Verbose          bool
+	SshOptionList    []string
+	UseLoopbackAddrs bool
 }
+
+var config *Config
 
 func ConfigLoad() *Config {
 	config = &Config{}
@@ -59,6 +62,8 @@ func ConfigLoad() *Config {
 		"$argv0",
 		filepath.Base(executable),
 		1)
+
+	setLoopback(config.UseLoopbackAddrs)
 
 	return config
 }
