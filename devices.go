@@ -208,7 +208,7 @@ func (dev *Device) connect() {
 		return
 	}
 
-	// Test if the first forwardde port is already being listened on.
+	// Test if the first forwarded port is already being listened on.
 	// If not, enable all the forwards.
 	firstForwardedPort := -1
 
