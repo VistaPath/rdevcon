@@ -137,10 +137,12 @@ func (dev *Device) ConnectCommand(addForwards bool) []string {
 		return darwinConnectCommand(ssh_command)
 	} else {
 		// Linux
-		if _, err := exec.LookPath("xterm"); err == nil {
+		if rdevcon_terminal, exists := os.LookupEnv("RDEVCON_TERMINAL"); exists {
+			return strings.Fields(fmt.Sprintf("%s %s", rdevcon_terminal, ssh_command))
+		} else if _, err := exec.LookPath("xterm"); err == nil {
 			return strings.Fields(fmt.Sprintf("xterm -title %s -e %s", dev.Serial, ssh_command))
 		} else {
-			return strings.Fields(fmt.Sprintf("gnome-terminal --disable-factory -- %s", ssh_command))
+			return strings.Fields(fmt.Sprintf("gnome-terminal -- %s", ssh_command))
 		}
 	}
 }
@@ -241,6 +243,10 @@ func (dev *Device) connect() {
 	addForwards := (firstForwardedPort != -1)
 
 	connectArgs := dev.ConnectCommand(addForwards)
+
+	if _, exists := os.LookupEnv("RDEVCON_DEBUG"); exists {
+		fmt.Printlin(connectArgs)
+	}
 
 	cmd := exec.Command(connectArgs[0], connectArgs[1:]...)
 	if err = cmd.Start(); err != nil {
