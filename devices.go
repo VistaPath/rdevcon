@@ -245,7 +245,7 @@ func (dev *Device) connect() {
 	connectArgs := dev.ConnectCommand(addForwards)
 
 	if _, exists := os.LookupEnv("RDEVCON_DEBUG"); exists {
-		fmt.Printlin(connectArgs)
+		fmt.Println(connectArgs)
 	}
 
 	cmd := exec.Command(connectArgs[0], connectArgs[1:]...)
